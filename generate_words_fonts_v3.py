@@ -5,7 +5,7 @@ Lê palavras do real_crops/, renderiza com fontes TTF e guarda
 diretamente em real_crops/ no formato correto.
 
 Usage:
-    python generate_synthetic.py --fonts fonts/ --crops real_crops/ --variations 3
+    python generate_synthetic.py --fonts fonts/ --crops real_crops/ --out synthetic_crops/ --variations 3
 
 Requirements:
     pip install pillow numpy
@@ -14,10 +14,11 @@ Requirements:
 import os
 import pathlib
 import random
+import cv2
 import argparse
 import numpy as np
 from glob import glob
-from PIL import Image, ImageDraw, ImageFont, ImageFilter
+from PIL import Image, ImageDraw, ImageFont, ImageFilter, ImageOps, ImageEnhance
 
 TARGET_W = 200
 TARGET_H = 50
@@ -34,6 +35,51 @@ def normalize_image(img: Image.Image) -> Image.Image:
     canvas.paste(img, ((TARGET_W - nw) // 2, (TARGET_H - nh) // 2))
     return canvas
 
+def random_rotation(img: Image.Image) -> Image.Image:
+    """Rotação ligeira """
+    angle = random.uniform(-3, 3)
+    arr   = np.array(img)
+    h, w  = arr.shape[:2]
+    M     = cv2.getRotationMatrix2D((w/2, h/2), angle, 1.0)
+    rotated = cv2.warpAffine(arr, M, (w, h),
+                              borderMode=cv2.BORDER_CONSTANT, borderValue=255)
+    return Image.fromarray(rotated)
+ 
+ 
+def ink_thickness(img: Image.Image) -> Image.Image:
+    """
+    Erosão ou dilatação morfológica — simula caneta mais fina ou mais grossa.
+    Só afeta pixels escuros (a tinta), não o fundo.
+    """
+    arr    = np.array(img)
+    kernel = np.ones((2, 2), np.uint8)
+    if random.random() < 0.5:
+        # Dilate = tinta mais grossa
+        result = cv2.dilate(255 - arr, kernel, iterations=1)
+    else:
+        # Erode = tinta mais fina
+        result = cv2.erode(255 - arr, kernel, iterations=1)
+    return Image.fromarray(255 - result)
+
+def simulate_scanner(img: Image.Image) -> Image.Image:
+    """Simula imagem digitalizada — limpa, alto contraste, sem ruído."""
+    arr = np.array(img).astype(np.float32)
+    
+    # Normaliza contraste com percentis (robusto a ruído)
+    p_low  = np.percentile(arr, 5)
+    p_high = np.percentile(arr, 95)
+    if p_high > p_low:
+        arr = np.clip((arr - p_low) / (p_high - p_low) * 255, 0, 255)
+    
+    # Contraste ligeiro — fator 1.2 em vez de 1.5, centrado na média real
+    mean  = arr.mean()
+    arr   = np.clip((arr - mean) * 1.2 + mean, 0, 255)
+    
+    # Ligeiro desfoque (anti-aliasing do scanner)
+    img = Image.fromarray(arr.astype(np.uint8))
+    img = img.filter(ImageFilter.GaussianBlur(radius=0.3))
+    
+    return img
 
 def render_word(word: str, font_path: str) -> Image.Image | None:
     """
@@ -62,63 +108,26 @@ def render_word(word: str, font_path: str) -> Image.Image | None:
     canvas = Image.new("L", (tw + pad * 2, th + pad * 2), 255)
     draw   = ImageDraw.Draw(canvas)
 
-    # Cor da tinta — não só preto puro, simula caneta azul/preta com variação
+    # Cor da tinta - não só preto puro, simula caneta azul/preta com variação
     color = random.randint(0, 60)
     draw.text((pad - bbox[0], pad - bbox[1]), word,
               font=font, fill=color)
+    
+    if random.random() < 0.4:
+        canvas = ink_thickness(canvas)
 
-    # Rotação ligeira 3°
+    # Rotação ligeira 
     if random.random() < 0.6:
-        angle  = random.uniform(-3, 3)
-        canvas = canvas.rotate(angle, fillcolor=255, expand=False)
+        canvas = random_rotation(canvas)
 
-    # Blur muito ligeiro
+    # Desfoque muito ligeiro
     if random.random() < 0.4:
         canvas = canvas.filter(ImageFilter.GaussianBlur(
             radius=random.uniform(0.2, 0.7)))
-
-    # Ruído ligeiro no fundo
-    if random.random() < 0.5:
-        arr   = np.array(canvas).astype(np.int16)
-        noise = np.random.randint(-20, 20, arr.shape).astype(np.int16)  # era 0-15
-        arr   = np.clip(arr + noise, 0, 255)
-        canvas = Image.fromarray(arr.astype(np.uint8))
-
-    # Brilho ligeiro
-    if random.random() < 0.4:
-        factor = random.uniform(0.92, 1.08)
-        arr    = np.clip(np.array(canvas).astype(np.float32) * factor, 0, 255)
-        arr[arr > 230] = 255
-        canvas = Image.fromarray(arr.astype(np.uint8))
-
-    # Fundo não uniforme 
-    if random.random() < 0.5:
-        arr = np.array(canvas).astype(np.float32)
-        # Gradiente de iluminação (simula sombra de um lado)
-        gradient = np.linspace(
-            random.uniform(0.85, 1.0),
-            random.uniform(0.85, 1.0),
-            arr.shape[1]
-        )
-        arr = np.clip(arr * gradient[np.newaxis, :], 0, 255)
-        canvas = Image.fromarray(arr.astype(np.uint8))
-
-    # Baixo contraste — simula foto com má exposição
+    
+    # Simula o scanner
     if random.random() < 0.3:
-        arr = np.array(canvas).astype(np.float32)
-        # Comprime o range dinâmico (texto menos negro, fundo menos branco)
-        arr = arr * 0.6 + random.uniform(40, 80)
-        canvas = Image.fromarray(np.clip(arr, 0, 255).astype(np.uint8))
-
-    # Bordas escuras — simula crop mal feita pelo YOLO
-    if random.random() < 0.3:
-        arr    = np.array(canvas).astype(np.float32)
-        border = random.randint(2, 6)
-        arr[:border, :]  *= random.uniform(0.3, 0.7)  # topo
-        arr[-border:, :] *= random.uniform(0.3, 0.7)  # base
-        arr[:, :border]  *= random.uniform(0.3, 0.7)  # esquerda
-        arr[:, -border:] *= random.uniform(0.3, 0.7)  # direita
-        canvas = Image.fromarray(np.clip(arr, 0, 255).astype(np.uint8))
+        canvas = simulate_scanner(canvas)
         
     return normalize_image(canvas)
 
@@ -149,7 +158,7 @@ def next_index(crops_dir: str) -> int:
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
-def generate(fonts_dir: str, crops_dir: str, variations: int):
+def generate(fonts_dir: str, crops_dir: str, out_dir: str, variations: int):
     # Carregar fontes
     font_paths = sorted([
         str(p) for p in pathlib.Path(fonts_dir).rglob("*.ttf")
@@ -189,8 +198,8 @@ def generate(fonts_dir: str, crops_dir: str, variations: int):
 
                 # Guardar
                 save_name = f"{idx:05d}"
-                img.save(os.path.join(crops_dir, save_name + ".png"))
-                with open(os.path.join(crops_dir, save_name + ".txt"),
+                img.save(os.path.join(out_dir, save_name + ".png"))
+                with open(os.path.join(out_dir, save_name + ".txt"),
                           "w", encoding="utf-8") as f:
                     f.write(word)
 
@@ -203,7 +212,7 @@ def generate(fonts_dir: str, crops_dir: str, variations: int):
     print(f"\nConcluído!")
     print(f"   Geradas : {generated}")
     print(f"   Falhadas: {skipped} (caracteres não suportados pela fonte)")
-    print(f"   Total em {crops_dir}: {idx} imagens")
+    print(f"   Total em {out_dir}: {idx} imagens")
 
 
 # ── CLI ───────────────────────────────────────────────────────────────────────
@@ -215,13 +224,15 @@ if __name__ == "__main__":
                         help="Pasta com ficheiros .ttf (default: fonts/)")
     parser.add_argument("--crops",      default="real_crops",
                         help="Pasta real_crops/ onde guardar (default: real_crops/)")
+    parser.add_argument("--out",        default="synthetic_crops",
+                        help="Pasta onde guardar imagens sintéticas (default: synthetic_crops/)")
     parser.add_argument("--variations", type=int, default=3,
                         help="Variações por palavra por fonte (default: 3)")
     args = parser.parse_args()
 
-    for p, name in [(args.fonts, "Pasta de fontes"), (args.crops, "Pasta real_crops")]:
+    for p, name in [(args.fonts, "Pasta de fontes"), (args.crops, "Pasta real_crops"), (args.out, "Pasta de saída")]:
         if not os.path.exists(p):
             print(f"{name} não encontrada: {p}")
             exit(1)
 
-    generate(args.fonts, args.crops, args.variations)
+    generate(args.fonts, args.crops, args.out, args.variations)
