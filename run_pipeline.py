@@ -55,7 +55,7 @@ def main():
     if not args.skip_synthetic:
         fonts_dir = SCRIPT_DIR / args.fonts
         out_dir = SCRIPT_DIR / args.synthetic_out
-        if not fonts_dir.exists() or not any(fonts_dir.glob("*.[tT][tT][fF]")):
+        if not fonts_dir.exists() or not any(fonts_dir.rglob("*.[tT][tT][fF]")):
             print(f"\nSem fontes .ttf em '{fonts_dir}' — a saltar geração de dados sintéticos.")
         else:
             out_dir.mkdir(parents=True, exist_ok=True)

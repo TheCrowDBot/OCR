@@ -32,7 +32,7 @@ class TrainingConfig:
     min_lr: float = 1e-7
 
     # FIX: apenas 1 fold para teste rápido — muda para False para correr todos os N_FOLDS
-    quick_test_single_fold: bool = True
+    quick_test_single_fold: bool = False
 
     device: torch.device = None
 

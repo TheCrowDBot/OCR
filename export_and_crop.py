@@ -8,7 +8,7 @@ from PIL import Image
 
 # ── Config ───────────────────────────────────────────────────
 LABEL_STUDIO_URL = 'https://label.benuino.eu.org'
-API_KEY = 'e1c6de79d4cc81b469902152cc5a1979936d4812'
+API_KEY = "e1c6de79d4cc81b469902152cc5a1979936d4812"
 PROJECT_ID = 7
 REAL_DIR = "real_crops"
 DATASET_ROOT = "final_ocr_dataset"
