@@ -27,11 +27,7 @@ class FoldTrainer:
         self.optimizer = torch.optim.AdamW(
             self.model.parameters(), lr=config.lr, weight_decay=config.weight_decay
         )
-        # NOTA: usar apenas um scheduler. Tínhamos um CosineAnnealingWarmRestarts
-        # (por-batch) + ReduceLROnPlateau (por-epoch) em simultâneo, e o cosine
-        # recalcula o LR a partir do valor base a cada .step(), anulando
-        # silenciosamente qualquer redução aplicada pelo ReduceLROnPlateau.
-        # ReduceLROnPlateau sozinho é mais previsível e mais fácil de depurar.
+        
         self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
             self.optimizer, mode="min", factor=config.plateau_factor,
             patience=config.plateau_patience, min_lr=config.min_lr,

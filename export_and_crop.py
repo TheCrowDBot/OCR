@@ -5,20 +5,17 @@ import numpy as np
 from glob import glob
 from label_studio_sdk import Client
 from PIL import Image
+from dotenv import load_dotenv
+import os
 
+load_dotenv()
 # ── Config ───────────────────────────────────────────────────
 LABEL_STUDIO_URL = 'https://label.benuino.eu.org'
-API_KEY = "e1c6de79d4cc81b469902152cc5a1979936d4812"
+API_KEY = os.getenv("LABEL_STUDIO_API_KEY")
 PROJECT_ID = 7
 REAL_DIR = "real_crops"
-DATASET_ROOT = "final_ocr_dataset"
-TARGET_W = 200 # Ajusta a largura
-TARGET_H = 50 # Ajusta a altura
-AUG_PER_REAL = 3 # Por cada imagem real, cria 3 versões aumentadas(rotações, distorções, ruído)
-NUM_SYNTHETIC = 0 # disabled - no fonts available
-batch_size = 16 # Treina 16 amostras de cada vez
-#padding_token = 99 # Em palavras pequenas coloca o padding a 99, para cada label ter o mesmo comprimento 
-N_FOLDS = 2 # Mudar para 5
+MIN_ASPECT_RATIO = 1.0  # crops com width/height abaixo disto são anotações degeneradas 
+#(caixa desenhada demasiado estreita/alta no Label Studio) e não têm texto legível -- não são gravados
 # ── Export from Label Studio ─────────────────────────────────
 ls = Client(url=LABEL_STUDIO_URL, api_key=API_KEY)
 ls.check_connection()
@@ -47,6 +44,7 @@ with open("data_ocr.json", "r", encoding="utf-8") as f:
 output_dir = "ocr_dataset/images"
 os.makedirs(output_dir, exist_ok=True)
 dataset = []
+skipped_degenerate = 0
 
 for task in tasks:
     image_path = task['data']['image']
@@ -82,11 +80,19 @@ for task in tasks:
         crop = img[y:y+h, x:x+w]
         if crop is None or crop.size == 0:
             continue
+
+        crop_h, crop_w = crop.shape[:2]
+        if crop_h == 0 or crop_w / crop_h < MIN_ASPECT_RATIO:
+            skipped_degenerate += 1
+            continue
+
         crop = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY)
         save_name = f"{task['id']}_{ann_id}.png"
         save_path = os.path.join(output_dir, save_name)
         cv2.imwrite(save_path, crop)
         dataset.append({"image": save_path, "label": text})
+
+print(f"Crops degenerados descartados (aspect ratio < {MIN_ASPECT_RATIO}): {skipped_degenerate}")
 
 with open("ocr_dataset/labels.json", "w", encoding="utf-8") as f:
     json.dump(dataset, f, indent=2, ensure_ascii=False)

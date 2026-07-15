@@ -5,7 +5,7 @@ Lê palavras do real_crops/, renderiza com fontes TTF e guarda
 diretamente em real_crops/ no formato correto.
 
 Usage:
-    python generate_synthetic.py --fonts fonts/ --crops real_crops/ --out synthetic_crops/ --variations 3
+    python generate_words_fonts_v3.py --fonts fonts/ --crops real_crops/ --out synthetic_crops/ --variations 3
 
 Requirements:
     pip install pillow numpy
@@ -20,7 +20,7 @@ import numpy as np
 from glob import glob
 from PIL import Image, ImageDraw, ImageFont, ImageFilter, ImageOps, ImageEnhance
 
-TARGET_W = 200
+TARGET_W = 256
 TARGET_H = 50
 
 

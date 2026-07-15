@@ -19,7 +19,7 @@ class TrainingConfig:
     aug_per_real: int = 5
     batch_size: int = 32
     val_batch_size: int = 64
-    n_folds: int = 2
+    n_folds: int = 10
     epochs: int = 150
     lr: float = 1e-3
     weight_decay: float = 1e-4
