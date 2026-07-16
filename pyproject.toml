@@ -16,7 +16,9 @@ dependencies = [
     "pillow (>=12.3.0,<13.0.0)",
     "matplotlib (>=3.11.0,<4.0.0)",
     "scikit-learn (>=1.9.0,<2.0.0)",
-    "label-studio-sdk (>=2.0.23,<3.0.0)"
+    "label-studio-sdk (>=2.0.23,<3.0.0)",
+    "ultralytics (>=8.4.93,<9.0.0)",
+    "python-dotenv (>=1.2.2,<2.0.0)"
 ]
 
 

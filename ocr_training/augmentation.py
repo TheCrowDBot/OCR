@@ -9,8 +9,7 @@ from PIL import Image, ImageFilter
 class ImageAugmentor:
     """
     Agrupa a normalização de imagem e todas as operações de augmentation
-    usadas no treino. Cada transformação individual é um staticmethod
-    (framework-agnóstica); `augment` encadeia-as aleatoriamente.
+    usadas no treino.
     """
 
     def __init__(self, target_w: int, target_h: int):
